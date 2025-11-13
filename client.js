@@ -33,3 +33,10 @@ function askConnectionInfo() {
         });
     });
 }
+
+function handleServerMessage(msg) {
+    if (msg.type === 'HELLO_ACK') {
+        console.log('Server welcome. Role:', msg.role);
+        return;
+    }
+}

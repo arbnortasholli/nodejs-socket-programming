@@ -23,3 +23,25 @@ const send = (clientKey, obj) => {
 
 const sendError = (clientKey, message) => send(clientKey, { type: 'error', message });
 const safePath = fname => path.join(FILE_DIR, path.basename(fname));
+
+server.on('message', (msgBuffer, rinfo) => {
+    const clientKey = `${rinfo.address}:${rinfo.port}`;
+    if (!clients[clientKey]) clients[clientKey] = {};
+    const client = clients[clientKey];
+
+    let msg;
+    try { 
+        msg = JSON.parse(msgBuffer.toString()); 
+    } catch { 
+        return log(`Malformed message from ${clientKey}`); 
+    }
+
+    if (msg.type === 'HELLO') {
+        client.username = msg.username || clientKey;
+        client.role = msg.role === 'admin' ? 'admin' : 'read';
+        log(`HELLO from ${client.username} (${client.role})`);
+        return send(clientKey, { type: 'HELLO_ACK', message: 'WELCOME', role: client.role });
+    }
+
+    if (!client.username) return sendError(clientKey, 'SEND_HELLO_FIRST');
+});
