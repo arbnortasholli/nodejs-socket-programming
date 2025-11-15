@@ -36,7 +36,36 @@ function askConnectionInfo() {
 
 function handleServerMessage(msg) {
     if (msg.type === 'HELLO_ACK') {
-        console.log('Server welcome. Role:', msg.role);
+        console.log('Server welcome. Your Role:', msg.role);
+        return;
+    }
+    if (msg.type === 'RESPONSE') {
+        switch (msg.command) {
+            case '/list':
+                console.log('Server files:');
+                msg.files.forEach(f => console.log(`- ${f.name} (${f.size} bytes)`));
+                break;
+            default:
+                console.log('Server response:', msg);
+        }
         return;
     }
 }
+
+askConnectionInfo();
+
+client.on('message', raw => {
+    let msg;
+    try { 
+        msg = JSON.parse(raw.toString()); 
+    }
+    catch { 
+        return console.log("There was an error!"); 
+    }
+    handleServerMessage(msg);
+    rl.prompt();
+});
+
+rl.on('line', line => {
+    send({ type: 'COMMAND', command: line.trim() });
+});

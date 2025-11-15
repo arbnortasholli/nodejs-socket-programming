@@ -44,4 +44,36 @@ server.on('message', (msgBuffer, rinfo) => {
     }
 
     if (!client.username) return sendError(clientKey, 'SEND_HELLO_FIRST');
+
+    if (msg.type === 'COMMAND') {
+        const command = msg.command;
+        switch (command) {
+            case '/list': {
+                const files = fs.readdirSync(FILE_DIR).map(f => {
+                    const st = fs.statSync(safePath(f));
+                    return { name: f, size: st.size, mtime: st.mtime };
+                });
+                return send(clientKey, { type: 'RESPONSE', command: '/list', files });
+            }
+        }
+    }
 });
+
+server.on('listening', () => {
+const addr = server.address();
+
+    const nets = require('os').networkInterfaces();
+    let localIp = '127.0.0.1';
+    for (const name of Object.keys(nets)) {
+        for (const net of nets[name]) {
+            if (net.family === 'IPv4' && !net.internal) {
+                localIp = net.address;
+                break;
+            }
+        }
+    }
+    console.log(`UDP server listening on ${localIp}:${addr.port}`);
+});
+
+server.on('error', err => log(`Server error: ${err.message}`));
+server.bind(PORT);
