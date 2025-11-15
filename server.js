@@ -43,8 +43,10 @@ server.on('message', (msgBuffer, rinfo) => {
         return send(clientKey, { type: 'HELLO_ACK', message: 'WELCOME', role: client.role });
     }
 
-    if (!client.username) return sendError(clientKey, 'SEND_HELLO_FIRST');
-
+    if (!client.username) {
+        return sendError(clientKey, 'SEND_HELLO_FIRST');
+    }
+    
     if (msg.type === 'COMMAND') {
         const command = msg.command;
         switch (command) {
@@ -80,13 +82,51 @@ server.on('message', (msgBuffer, rinfo) => {
                 log(`${client.username} deleted ${fname}`);
                 return send(clientKey, { type: 'RESPONSE', command: '/delete', filename: fname, message: 'DELETED' });
             }
+            case '/search': {
+                const term = msg.keyword;
+                if (!term) {
+                    return sendError(clientKey, 'MISSING_KEYWORD');
+                }
+                const files = fs.readdirSync(FILE_DIR).filter(f => f.includes(term));
+                return send(clientKey, { type: 'RESPONSE', command: '/search', files });
+            }
+            case '/upload': {
+                const fname = msg.filename;
+                const size = msg.size;
+                if (!fname || !size) {
+                    return sendError(clientKey, 'MISSING_FILENAME_OR_SIZE');
+                }
+                const fp = safePath(fname);
+                client.upload = { filename: fname, size, received: 0, stream: fs.createWriteStream(fp) };
+                log(`${client.username} started upload ${fname} (${size} bytes)`);
+                return send(clientKey, { type: 'RESPONSE', command: '/upload', message: 'READY' });
+            }
+            case '/download': {
+                const fname = msg.filename;
+                if (!fname) {
+                    return sendError(clientKey, 'MISSING_FILENAME');
+                }
+                const fp = safePath(fname);
+                if (!fs.existsSync(fp)) {
+                    return sendError(clientKey, 'NOT_FOUND');
+                }
+                const rs = fs.createReadStream(fp, { highWaterMark: 16 * 1024 });
+                rs.on('data', chunk => 
+                    send(clientKey, { type: 'FILE_DATA', filename: fname, chunk: chunk.toString('base64'), final: false })
+                );
+                rs.on('end', () => {
+                    send(clientKey, { type: 'FILE_DATA', filename: fname, chunk: '', final: true });
+                    log(`${client.username} completed download ${fname}`);
+                });
+                break;
+            }
+            default: return sendError(clientKey, `UNKNOWN_COMMAND ${command}`);
         }
     }
 });
 
 server.on('listening', () => {
-const addr = server.address();
-
+    const addr = server.address();
     const nets = require('os').networkInterfaces();
     let localIp = '127.0.0.1';
     for (const name of Object.keys(nets)) {
