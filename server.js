@@ -55,6 +55,31 @@ server.on('message', (msgBuffer, rinfo) => {
                 });
                 return send(clientKey, { type: 'RESPONSE', command: '/list', files });
             }
+            case '/info': {
+                const fname = msg.filename;
+                if (!fname) return sendError(clientKey, 'MISSING_FILENAME');
+                const fp = safePath(fname);
+                if (!fs.existsSync(fp)) return sendError(clientKey, 'NOT_FOUND');
+                const st = fs.statSync(fp);
+                return send(clientKey, { type: 'RESPONSE', command: '/info', filename: fname, size: st.size, createdAt: st.birthtime, modifiedAt: st.mtime });
+            }
+            case '/read': {
+                const fname = msg.filename;
+                if (!fname) return sendError(clientKey, 'MISSING_FILENAME');
+                const fp = safePath(fname);
+                if (!fs.existsSync(fp)) return sendError(clientKey, 'NOT_FOUND');
+                const content = fs.readFileSync(fp).toString('base64');
+                return send(clientKey, { type: 'RESPONSE', command: '/read', filename: fname, content, encoding: 'base64' });
+            }
+            case '/delete': {
+                const fname = msg.filename;
+                if (!fname) return sendError(clientKey, 'MISSING_FILENAME');
+                const fp = safePath(fname);
+                if (!fs.existsSync(fp)) return sendError(clientKey, 'NOT_FOUND');
+                fs.unlinkSync(fp);
+                log(`${client.username} deleted ${fname}`);
+                return send(clientKey, { type: 'RESPONSE', command: '/delete', filename: fname, message: 'DELETED' });
+            }
         }
     }
 });
