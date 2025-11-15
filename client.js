@@ -36,7 +36,7 @@ function askConnectionInfo() {
 
 function handleServerMessage(msg) {
     if (msg.type === 'HELLO_ACK') {
-        console.log('Server welcome. Your Role:', msg.role);
+        console.log('Server welcome. Role:', msg.role);
         return;
     }
     if (msg.type === 'RESPONSE') {
@@ -45,25 +45,52 @@ function handleServerMessage(msg) {
                 console.log('Server files:');
                 msg.files.forEach(f => console.log(`- ${f.name} (${f.size} bytes)`));
                 break;
+            case '/read':
+                console.log(`${msg.filename} contents (base64):\n${msg.content}`);
+                break;
+            case '/info':
+                console.log(`Info ${msg.filename} - Size: ${msg.size}, Created: ${msg.createdAt}, Modified: ${msg.modifiedAt}`);
+                break;
             default:
                 console.log('Server response:', msg);
         }
         return;
     }
+    if (msg.type === 'error') console.log('ERROR:', msg.message);
 }
+
+rl.on('line', async line => {
+    const text = line.trim();
+    if (!text) { rl.prompt(); return; }
+    const parts = text.split(' ').filter(Boolean);
+    const cmd = parts[0];
+
+    if (cmd === '/read' || cmd === '/info') {
+        const filename = parts.slice(1).join(' ');
+        if (!filename) { console.log(`Usage: ${cmd} <filename>`); rl.prompt(); return; }
+        send({ type: 'COMMAND', command: cmd, filename });
+        rl.prompt();
+        return;
+    }
+
+    if (cmd === '/delete') {
+        if (ROLE !== 'admin') { console.log('Delete requires admin'); rl.prompt(); return; }
+        const filename = parts.slice(1).join(' ');
+        if (!filename) { console.log(`Usage: ${cmd} <filename>`); rl.prompt(); return; }
+        send({ type: 'COMMAND', command: cmd, filename });
+        rl.prompt();
+        return;
+    }
+
+    send({ type: 'COMMAND', command: text });
+    rl.prompt();
+});
 
 askConnectionInfo();
 
-client.on('message', raw => {
-    let msg;
-    try { 
-        msg = JSON.parse(raw.toString()); 
-    }
-    catch { 
-        return console.log("There was an error!"); 
-    }
-    handleServerMessage(msg);
-    rl.prompt();
+client.on('message', buf => {
+    try { handleServerMessage(JSON.parse(buf.toString())); } 
+    catch { console.log('Malformed server message'); }
 });
 
 rl.on('line', line => {
